@@ -1,0 +1,518 @@
+---
+title: 'VideoEditor'
+description: 'Complete API reference for the VideoEditor component'
+---
+
+## Overview
+
+The `VideoEditor` component provides a powerful video editing interface with timeline, effects, text overlays, transitions, and export capabilities.
+
+---
+
+## Import
+
+```typescript
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const VideoEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.VideoEditor })),
+  { ssr: false }
+);
+```
+
+<Warning>
+Always use dynamic import with `ssr: false` to avoid server-side rendering issues.
+</Warning>
+
+---
+
+## Prerequisites
+
+<Warning>
+**CRITICAL:** VideoEditor requires WASM files to be copied to your `public/` folder. See [Installation Guide](/installation#step-7-for-video-editor-only---copy-wasm-files).
+</Warning>
+
+### Required WASM Files
+
+```bash
+public/
+├── MediaInfoModule.wasm (2.3 MB)
+├── worker.js
+├── const.js
+├── errors.js
+├── decode_worker.js
+├── encode_worker.js
+└── umd/
+    └── ffmpeg-core.wasm (31 MB)
+```
+
+### URL Rewrites
+
+Add to `next.config.js`:
+
+```javascript
+async rewrites() {
+  return [
+    {
+      source: '/studio/:path(MediaInfoModule.wasm|worker.js|const.js|errors.js|decode_worker.js|encode_worker.js)',
+      destination: '/:path',
+    },
+    {
+      source: '/studio/umd/:path*',
+      destination: '/umd/:path*',
+    },
+  ];
+}
+```
+
+---
+
+## Props
+
+### Required Props
+
+<ParamField path="licenseKey" type="string" required>
+  Your SDK license key (JWT format). Contact your account manager to obtain a license key.
+
+  ```typescript
+  licenseKey="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+</ParamField>
+
+<ParamField path="onClose" type="() => void" required>
+  Callback function called when the user closes the editor.
+
+  ```typescript
+  onClose={() => setShowEditor(false)}
+  ```
+</ParamField>
+
+---
+
+### Optional Props
+
+<ParamField path="apiUrl" type="string">
+  Override the default license validation API endpoint.
+
+  **Default:** `https://api.kloudleads.com/license/validate`
+
+  ```typescript
+  apiUrl="https://localhost:3030/social"
+  ```
+</ParamField>
+
+<ParamField path="defaultVideo" type="File">
+  Initial video file to load into the editor.
+
+  ```typescript
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+
+  <VideoEditor
+    defaultVideo={videoFile}
+    // ...
+  />
+  ```
+
+  **Supported Formats:** MP4, WebM, MOV, AVI
+</ParamField>
+
+<ParamField path="onExport" type="(result: EditorCallback) => void">
+  Callback function called when the user exports the edited video.
+
+  **EditorCallback:**
+  ```typescript
+  interface EditorCallback {
+    videoUrl?: string;       // Blob URL of exported video
+    base64?: string;         // Data URL (for images)
+    thumbnail?: string;      // Video thumbnail
+    duration?: number;       // Video duration in seconds
+    width?: number;          // Video width
+    height?: number;         // Video height
+    fps?: number;            // Frames per second
+  }
+  ```
+
+  **Example:**
+  ```typescript
+  const handleExport = (result: EditorCallback) => {
+    if (result.videoUrl) {
+      // Download the video
+      const link = document.createElement('a');
+      link.href = result.videoUrl;
+      link.download = 'edited-video.mp4';
+      link.click();
+
+      // Or upload to server
+      fetch(result.videoUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const formData = new FormData();
+          formData.append('video', blob, 'video.mp4');
+          return fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+        });
+    }
+  };
+  ```
+</ParamField>
+
+<ParamField path="theme" type="Record<string, string>">
+  Custom theme object to override default colors and styling.
+
+  ```typescript
+  const customTheme = {
+    'background.primary': '#0f172a',
+    'background.secondary': '#1e293b',
+    'text.primary': '#ffffff',
+    'accent.primary': '#3b82f6',
+  };
+
+  <VideoEditor theme={customTheme} />
+  ```
+
+  See [Theme Customization](/api-reference/introduction#theme-customization) for all available keys.
+</ParamField>
+
+<ParamField path="showThemeCreator" type="boolean" default="false">
+  Show theme customization UI to users. Set to `false` for production.
+
+  ```typescript
+  showThemeCreator={false}  // Hide theme UI
+  ```
+</ParamField>
+
+<ParamField path="brands" type="BrandDetails[]">
+  Array of brand presets for consistent styling.
+
+  ```typescript
+  interface BrandDetails {
+    id: string;
+    name: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontFamily?: string;
+    logo?: string;
+  }
+
+  const brands = [
+    {
+      id: 'brand-1',
+      name: 'My Brand',
+      primaryColor: '#3b82f6',
+      fontFamily: 'Inter',
+    },
+  ];
+
+  <VideoEditor brands={brands} />
+  ```
+</ParamField>
+
+<ParamField path="defaultTemplate" type="Template">
+  Load a template on editor startup.
+
+  ```typescript
+  interface Template {
+    id?: string;
+    name?: string;
+    sceneData: EditorItem[];
+    width: number;
+    height: number;
+    thumbnail?: string;
+    brandId?: string;
+  }
+
+  <VideoEditor defaultTemplate={myTemplate} />
+  ```
+</ParamField>
+
+<ParamField path="onSaveTemplate" type="(props: { brandId: string; template: Template }) => Promise<void>">
+  Callback when user saves a template.
+
+  ```typescript
+  const handleSaveTemplate = async ({ brandId, template }) => {
+    await fetch('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ brandId, template }),
+    });
+  };
+  ```
+</ParamField>
+
+<ParamField path="onGetTemplates" type="(brandIdList: string[]) => Promise<{ success: { data: Template[] } }>">
+  Callback to fetch templates for display.
+
+  ```typescript
+  const handleGetTemplates = async (brandIds) => {
+    const response = await fetch('/api/templates?' + new URLSearchParams({
+      brandIds: brandIds?.join(',') || ''
+    }));
+    return response.json();
+  };
+  ```
+</ParamField>
+
+<ParamField path="createAutomatedContent" type="CreateAutomatedContent">
+  AI-powered content creation function (advanced feature).
+</ParamField>
+
+---
+
+## Complete Example
+
+```typescript
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
+
+const VideoEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.VideoEditor })),
+  { ssr: false }
+);
+
+const customTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+};
+
+export default function VideoStudioPage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = useCallback((result: any) => {
+    setIsExporting(false);
+
+    if (result.videoUrl) {
+      // Download
+      const link = document.createElement('a');
+      link.href = result.videoUrl;
+      link.download = `edited-${Date.now()}.mp4`;
+      link.click();
+
+      setShowEditor(false);
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShowEditor(false);
+    setSelectedFile(null);
+  };
+
+  return (
+    <div className="min-h-screen p-6">
+      {!showEditor && (
+        <div>
+          <h1 className="text-3xl font-bold mb-4">Video Studio</h1>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg"
+          >
+            Choose Video
+          </button>
+        </div>
+      )}
+
+      {showEditor && selectedFile && (
+        <div className="fixed inset-0 z-50">
+          <VideoEditor
+            licenseKey={process.env.NEXT_PUBLIC_LICENSE_KEY || ''}
+            apiUrl="https://localhost:3030/social"
+            defaultVideo={selectedFile}
+            onClose={handleClose}
+            onExport={handleExport}
+            theme={customTheme}
+            showThemeCreator={false}
+          />
+        </div>
+      )}
+
+      {/* Export Loading Overlay */}
+      {isExporting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto" />
+            <p className="text-white mt-4 text-xl">Exporting video...</p>
+            <p className="text-gray-400 text-sm">This may take 1-2 minutes</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## Features
+
+### Video Editing
+
+- **Upload & Load:** MP4, WebM, MOV, AVI formats
+- **Trim:** Cut video start and end times
+- **Split:** Cut video into multiple clips
+- **Arrange:** Drag-and-drop clips on timeline
+- **Speed:** Adjust playback speed (0.25x - 4x)
+- **Volume:** Audio volume control and mute
+
+### Timeline
+
+- **Multi-track:** Video, audio, text, subtitle tracks
+- **Zoom:** Timeline zoom in/out
+- **Scrubbing:** Frame-accurate seeking
+- **Snap:** Snap-to-grid for precise alignment
+- **Markers:** Add markers for reference points
+
+### Text & Graphics
+
+- **Text Overlays:** Add text with custom fonts, colors, sizes
+- **Shapes:** Rectangles, circles, arrows, custom shapes
+- **Stickers:** GIF stickers and emojis
+- **Images:** Overlay images on video
+
+### Effects & Filters
+
+- **Color Filters:** Grayscale, Sepia, Invert, Colorize
+- **Adjustments:** Brightness, Contrast, Saturation
+- **Blur:** Gaussian blur with adjustable radius
+- **Transitions:** Fade in/out, crossfade (coming soon)
+
+### Audio
+
+- **Audio Tracks:** Multiple audio tracks
+- **Background Music:** Add music files
+- **Volume Control:** Per-track volume adjustment
+- **Mute:** Mute original video audio
+
+### Subtitles
+
+- **SRT Support:** Import .srt subtitle files
+- **Styling:** Font, color, size, position
+- **Word Highlighting:** Highlight current word (karaoke style)
+- **Background:** Subtitle background with opacity
+
+### Export
+
+- **Format:** MP4 (H.264 video, AAC audio)
+- **Quality:** Adjustable bitrate and resolution
+- **Frame Rate:** Original or custom FPS
+- **Audio:** Include/exclude audio tracks
+
+---
+
+## Performance Considerations
+
+<Warning>
+Video processing is **CPU-intensive** and happens in the browser using WebAssembly (FFmpeg).
+</Warning>
+
+### Typical Export Times
+
+| Video Quality | Duration | Export Time |
+|---------------|----------|-------------|
+| 720p          | 10s      | ~30 seconds |
+| 1080p         | 30s      | ~2 minutes  |
+| 1080p         | 60s      | ~4 minutes  |
+| 4K            | Any      | Not recommended |
+
+### Recommendations
+
+1. **Show Progress Indicator:** Always display a loading overlay during export
+2. **Warn Users:** Inform users about processing time upfront
+3. **Limit Duration:** Recommend videos under 60 seconds for browser processing
+4. **Lower Resolution:** Suggest 720p for faster exports
+5. **Desktop Only:** Mobile browsers not supported for video editing
+6. **Server-Side Alternative:** Consider server-side processing for production apps
+
+### Mobile Support
+
+<Warning>
+Mobile browsers have **limited support** due to memory constraints and missing WebAssembly features. Desktop browsers strongly recommended.
+</Warning>
+
+---
+
+## Browser Support
+
+| Browser | Version | Status |
+|---------|---------|--------|
+| Chrome  | 90+     | ✅ Full Support |
+| Firefox | 88+     | ✅ Full Support |
+| Safari  | 14+     | ✅ Full Support |
+| Edge    | 90+     | ✅ Full Support |
+| Mobile  | Any     | ❌ Not Supported |
+
+---
+
+## Troubleshooting
+
+### WASM Files Not Loading
+
+**Error:** `MediaInfoModule.wasm 404 Not Found`
+
+**Solution:**
+1. Copy WASM files to `public/` folder
+2. Add URL rewrites to `next.config.js`
+3. Restart dev server: `rm -rf .next && npm run dev`
+
+See [FAQ: WASM Loading Failures](/troubleshooting/faq#wasm-loading-failures)
+
+### Audio Not Playing
+
+**Cause:** Browser autoplay policies require user interaction.
+
+**Solution:** Ensure editor is opened via user click/gesture, not programmatically on page load.
+
+### Export Fails or Hangs
+
+**Causes:**
+- Video too long (>2 minutes)
+- Resolution too high (4K)
+- Insufficient memory
+
+**Solutions:**
+- Use shorter clips
+- Lower resolution to 720p
+- Close other browser tabs
+- Increase Node.js memory: `NODE_OPTIONS=--max-old-space-size=4096`
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integration Guide" icon="book" href="/integration-guides/nextjs-video-editor">
+    Step-by-step Next.js integration
+  </Card>
+  <Card title="ImageEditor API" icon="image" href="/api-reference/image-editor">
+    ImageEditor component reference
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting/faq">
+    Common issues and solutions
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Installation guide
+  </Card>
+</CardGroup>

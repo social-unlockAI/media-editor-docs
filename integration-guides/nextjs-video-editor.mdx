@@ -1,0 +1,690 @@
+# Next.js VideoEditor Integration Guide
+
+Complete guide for integrating the `@distralabs/media-editor` VideoEditor component into your Next.js application.
+
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [WASM Files Setup](#wasm-files-setup)
+- [VideoEditor Interface](#videoeditor-interface)
+- [Step-by-Step Integration](#step-by-step-integration)
+- [Theme Customization](#theme-customization)
+- [Video Processing](#video-processing)
+- [Complete Example](#complete-example)
+
+---
+
+## Prerequisites
+
+- Node.js 16.x or higher
+- Next.js 14.x (not 15.x - see React version requirements)
+- React 18.2.0 (SDK requires React 18, not React 19)
+- ~40MB of disk space for WASM modules
+
+## Installation
+
+### 1. Install the SDK
+
+```bash
+npm install @distralabs/media-editor
+```
+
+### 2. Install Required Dependencies
+
+```bash
+npm install framer-motion lucide-react clsx tailwind-merge
+```
+
+### 3. Configure Next.js for React 18
+
+**package.json:**
+```json
+{
+  "dependencies": {
+    "@distralabs/media-editor": "^1.1.9",
+    "next": "14.2.15",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}
+```
+
+---
+
+## WASM Files Setup
+
+**CRITICAL:** VideoEditor requires WebAssembly modules for video processing. These must be copied to your `public/` folder.
+
+### Step 1: Copy WASM Files
+
+Run this command from your Next.js project root:
+
+```bash
+# Create public directory if it doesn't exist
+mkdir -p public
+
+# Copy MediaInfo WASM module (for video metadata)
+cp node_modules/@distralabs/media-editor/dist/MediaInfoModule.wasm public/
+
+# Copy FFmpeg workers (for video encoding/decoding)
+cp node_modules/@distralabs/media-editor/dist/worker.js public/
+cp node_modules/@distralabs/media-editor/dist/const.js public/
+cp node_modules/@distralabs/media-editor/dist/errors.js public/
+cp node_modules/@distralabs/media-editor/dist/decode_worker.js public/
+cp node_modules/@distralabs/media-editor/dist/encode_worker.js public/
+
+# Copy FFmpeg core (31MB WASM file)
+cp -r node_modules/@distralabs/media-editor/dist/umd public/
+```
+
+### Step 2: Verify Files
+
+Your `public/` folder should contain:
+
+```
+public/
+├── MediaInfoModule.wasm    (2.3 MB)
+├── worker.js
+├── const.js
+├── errors.js
+├── decode_worker.js
+├── encode_worker.js
+└── umd/
+    ├── ffmpeg-core.js
+    └── ffmpeg-core.wasm    (31 MB)
+```
+
+### Step 3: Configure URL Rewrites
+
+If your editor pages are nested (e.g., `/studio/video`), add rewrites to `next.config.js`:
+
+**next.config.js:**
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+      fs: false,
+    };
+    return config;
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/studio/:path(MediaInfoModule.wasm|worker.js|const.js|errors.js|decode_worker.js|encode_worker.js)',
+        destination: '/:path',
+      },
+      {
+        source: '/studio/umd/:path*',
+        destination: '/umd/:path*',
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;
+```
+
+---
+
+## VideoEditor Interface
+
+### Core Props
+
+```typescript
+interface VideoEditorProps {
+  // Required
+  licenseKey: string;              // Your SDK license key (JWT)
+  onClose: () => void;             // Called when user closes editor
+
+  // Optional
+  apiUrl?: string;                 // Override license validation API URL
+  defaultVideo?: File;             // Initial video file to load
+  onExport?: EditorCallback;       // Called when video is exported
+  theme?: Record<string, string>;  // Custom theme colors
+  showThemeCreator?: boolean;      // Show theme customization UI
+  brands?: BrandDetails[];         // Brand presets
+  defaultTemplate?: Template;      // Load template on start
+
+  // Advanced
+  onSaveTemplate?: (props: { brandId: string; template: any }) => Promise<void>;
+  onGetTemplates?: (brandIdList: string[]) => Promise<void | { success: { data: any } }>;
+  createAutomatedContent?: CreateAutomatedContent;
+}
+```
+
+### Callback Types
+
+```typescript
+interface EditorCallback {
+  (result: VideoExportResult): void;
+}
+
+interface VideoExportResult {
+  videoUrl?: string;     // Object URL or data URL of exported video
+  base64?: string;       // Base64 encoded video (if small enough)
+  blob?: Blob;           // Video blob for upload
+  duration?: number;     // Video duration in seconds
+  width?: number;        // Video width
+  height?: number;       // Video height
+  fps?: number;          // Frames per second
+}
+```
+
+---
+
+## Step-by-Step Integration
+
+### Step 1: Create Your Page Component
+
+**app/studio/video/page.tsx:**
+```typescript
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// Dynamic import to avoid SSR
+const VideoEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.VideoEditor })),
+  { ssr: false }
+);
+
+export default function VideoStudioPage() {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // State management
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedVideo, setExportedVideo] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Continue to Step 2...
+}
+```
+
+### Step 2: Implement File Selection
+
+```typescript
+const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file && file.type.startsWith('video/')) {
+    setSelectedFile(file);
+    setShowEditor(true);
+  }
+};
+
+const handleDrop = (e: React.DragEvent) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files?.[0];
+  if (file && file.type.startsWith('video/')) {
+    setSelectedFile(file);
+    setShowEditor(true);
+  }
+};
+```
+
+### Step 3: Implement Export Callback
+
+```typescript
+const handleExport = useCallback((result: any) => {
+  console.log('Video export result:', result);
+  setIsExporting(false);
+
+  if (result.videoUrl || result.base64) {
+    setExportedVideo(result.videoUrl || result.base64);
+    setShowEditor(false);
+    // Show success modal or download
+  }
+}, []);
+
+const handleClose = () => {
+  setShowEditor(false);
+  setSelectedFile(null);
+};
+
+const handleDownload = () => {
+  if (exportedVideo) {
+    const link = document.createElement('a');
+    link.href = exportedVideo;
+    link.download = `edited-video-${Date.now()}.mp4`;
+    link.click();
+  }
+};
+```
+
+### Step 4: Render the Editor
+
+```typescript
+return (
+  <div className="min-h-screen">
+    {/* Upload UI */}
+    {!showEditor && (
+      <div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <button onClick={() => fileInputRef.current?.click()}>
+          Choose Video
+        </button>
+      </div>
+    )}
+
+    {/* Video Editor */}
+    {showEditor && selectedFile && (
+      <div className="fixed inset-0 z-40">
+        <VideoEditor
+          licenseKey="YOUR_LICENSE_KEY_HERE"
+          apiUrl="https://your-api.com/social"
+          defaultVideo={selectedFile}
+          onClose={handleClose}
+          onExport={handleExport}
+          theme={customTheme}
+          showThemeCreator={false}
+        />
+      </div>
+    )}
+
+    {/* Loading overlay during export */}
+    {isExporting && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white text-xl font-bold">Exporting your video...</p>
+          <p className="text-slate-400 mt-2">This may take a moment</p>
+        </div>
+      </div>
+    )}
+  </div>
+);
+```
+
+---
+
+## Theme Customization
+
+### Creating a Custom Theme
+
+```typescript
+const videoTheme = {
+  // Backgrounds
+  'background.primary': '#0f172a',      // slate-950
+  'background.secondary': '#1e293b',    // slate-800
+  'background.tertiary': '#334155',     // slate-700
+
+  // Text
+  'text.primary': '#ffffff',
+  'text.secondary': '#cbd5e0',
+
+  // Brand colors
+  'accent.primary': '#3b82f6',          // blue-500
+  'accent.secondary': '#06b6d4',        // cyan-500
+  'accent.hover': '#60a5fa',            // blue-400
+
+  // Borders
+  'border.default': '#334155',
+  'border.subtle': '#1e293b',
+
+  // Components
+  'button.primary': '#3b82f6',
+  'toolbar.background': '#0f172a',
+  'sidebar.background': '#1e293b',
+  'canvas.background': '#1a202c',
+  'timeline.background': '#1e293b',
+};
+```
+
+### Applying the Theme
+
+```typescript
+<VideoEditor
+  licenseKey={licenseKey}
+  defaultVideo={selectedFile}
+  onClose={handleClose}
+  onExport={handleExport}
+  theme={videoTheme}
+  showThemeCreator={false}
+/>
+```
+
+---
+
+## Video Processing
+
+### Understanding Video Export
+
+The VideoEditor uses FFmpeg (WebAssembly) for video processing:
+
+1. **Decoding**: Video frames are decoded using `decode_worker.js`
+2. **Canvas Rendering**: Frames are rendered with effects/overlays on Konva canvas
+3. **Encoding**: Frames are re-encoded to H.264/MP4 using `encode_worker.js`
+4. **Output**: Final video is returned as Blob/Object URL
+
+### Export Options
+
+```typescript
+const handleExport = useCallback((result: any) => {
+  console.log('Export complete:', {
+    videoUrl: result.videoUrl,      // Object URL (use for preview/download)
+    duration: result.duration,      // Duration in seconds
+    width: result.width,            // Video width
+    height: result.height,          // Video height
+    fps: result.fps,                // Frames per second
+  });
+
+  // Option 1: Download directly
+  const link = document.createElement('a');
+  link.href = result.videoUrl;
+  link.download = 'edited-video.mp4';
+  link.click();
+
+  // Option 2: Upload to server
+  fetch(result.videoUrl)
+    .then(res => res.blob())
+    .then(blob => {
+      const formData = new FormData();
+      formData.append('video', blob, 'edited-video.mp4');
+
+      return fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+    });
+}, []);
+```
+
+### Performance Considerations
+
+- **Video Size**: Larger videos take longer to process (1-2 minutes for 1080p 30s video)
+- **Browser Memory**: Processing requires significant memory (500MB+ for HD video)
+- **Mobile Support**: May not work well on mobile devices due to memory constraints
+- **Progress Indication**: Always show loading indicator during export
+
+---
+
+## Complete Example
+
+**app/studio/video/page.tsx:**
+
+```typescript
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, Download, X, Video, Film } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const VideoEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.VideoEditor })),
+  { ssr: false }
+);
+
+const videoTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'background.tertiary': '#334155',
+  'text.primary': '#ffffff',
+  'text.secondary': '#cbd5e0',
+  'accent.primary': '#3b82f6',
+  'accent.secondary': '#06b6d4',
+  'accent.hover': '#60a5fa',
+  'border.default': '#334155',
+  'border.subtle': '#1e293b',
+};
+
+export default function VideoStudioPage() {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedVideo, setExportedVideo] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = useCallback((result: any) => {
+    console.log('Video export result:', result);
+    setIsExporting(false);
+
+    if (result.videoUrl || result.base64) {
+      setExportedVideo(result.videoUrl || result.base64);
+      setShowExportModal(true);
+      setShowEditor(false);
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShowEditor(false);
+    setSelectedFile(null);
+  };
+
+  const handleDownload = () => {
+    if (exportedVideo) {
+      const link = document.createElement('a');
+      link.href = exportedVideo;
+      link.download = `edited-video-${Date.now()}.mp4`;
+      link.click();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950">
+      {/* Upload Interface */}
+      <AnimatePresence>
+        {!showEditor && !showExportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center min-h-screen p-6"
+          >
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Video className="w-12 h-12 text-blue-400" />
+                <h1 className="text-5xl font-black text-white">
+                  Video Studio
+                </h1>
+              </div>
+              <p className="text-xl text-slate-300">
+                Professional video editing with powerful effects
+              </p>
+            </div>
+
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className="relative w-full max-w-2xl cursor-pointer group"
+            >
+              <div className="bg-white/10 backdrop-blur-md border-2 border-dashed border-white/30 rounded-3xl p-16 text-center hover:border-blue-400 transition-all">
+                <Film className="w-20 h-20 mx-auto mb-6 text-blue-400 group-hover:scale-110 transition-transform" />
+                <h3 className="text-2xl font-bold text-white mb-3">
+                  Drop your video here
+                </h3>
+                <p className="text-slate-300 mb-6">
+                  or click to browse your files
+                </p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Video Editor */}
+      {showEditor && selectedFile && (
+        <div className="fixed inset-0 z-40">
+          <VideoEditor
+            licenseKey="YOUR_LICENSE_KEY_HERE"
+            apiUrl="https://localhost:3030/social"
+            defaultVideo={selectedFile}
+            onClose={handleClose}
+            onExport={handleExport}
+            theme={videoTheme}
+            showThemeCreator={false}
+          />
+        </div>
+      )}
+
+      {/* Export Modal */}
+      <AnimatePresence>
+        {showExportModal && exportedVideo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80"
+            onClick={() => setShowExportModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 rounded-2xl p-8 max-w-4xl w-full"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-white">
+                  Video Ready!
+                </h2>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+
+              <div className="mb-6 rounded-xl overflow-hidden bg-slate-900">
+                <video
+                  src={exportedVideo}
+                  controls
+                  className="w-full h-auto"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={handleDownload}
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl text-white font-bold"
+                >
+                  <Download className="w-5 h-5" />
+                  Download Video
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExportModal(false);
+                    setSelectedFile(null);
+                    setExportedVideo(null);
+                  }}
+                  className="flex-1 px-6 py-4 bg-white/10 rounded-xl text-white font-bold"
+                >
+                  Create Another
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Loading overlay during export */}
+      {isExporting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white text-xl font-bold">Exporting your video...</p>
+            <p className="text-slate-400 mt-2">This may take a moment</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## Troubleshooting
+
+### WASM Files Not Loading
+
+**Symptom:** "MediaInfoModule.wasm 404 Not Found"
+
+**Solution:**
+1. Verify WASM files are in `public/` folder
+2. Check URL rewrites in `next.config.js`
+3. Restart dev server after config changes
+
+### Video Not Exporting
+
+**Symptom:** Export hangs or fails
+
+**Possible causes:**
+- Browser out of memory (try smaller video)
+- FFmpeg workers not loaded (check console for errors)
+- Video codec not supported (try H.264/MP4)
+
+### Timeline Not Showing
+
+**Symptom:** Timeline is blank or missing
+
+**Solution:**
+- Ensure SDK CSS is imported in `globals.css`
+- Check browser console for errors
+- Verify video file is valid
+
+---
+
+## Next Steps
+
+1. See [FAQ.md](./FAQ.md) for common issues and solutions
+2. See [NEXTJS_IMAGEEDITOR_INTEGRATION.md](./NEXTJS_IMAGEEDITOR_INTEGRATION.md) for image editing
+3. Check the included example project for a complete working implementation
+
+## Support
+
+For issues or questions:
+- Support Portal: Contact your account manager or support@distralabs.com
+- Documentation: https://docs.distralabs.com

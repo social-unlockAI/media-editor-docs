@@ -1,0 +1,330 @@
+---
+title: 'API Reference'
+description: 'Complete API documentation for Media Editor SDK components'
+---
+
+## Overview
+
+The Media Editor SDK provides two main components for building powerful editing experiences in your React/Next.js applications:
+
+<CardGroup cols={2}>
+  <Card title="ImageEditor" icon="image" href="/api-reference/image-editor">
+    Create stunning images with filters, effects, text, and shapes
+  </Card>
+  <Card title="VideoEditor" icon="video" href="/api-reference/video-editor">
+    Edit videos with timeline, effects, text overlays, and export
+  </Card>
+</CardGroup>
+
+---
+
+## Common Concepts
+
+### License Validation
+
+Both components require a valid license key for operation:
+
+```typescript
+licenseKey: string  // Required JWT license key
+apiUrl?: string     // Optional: Custom license API endpoint
+```
+
+The SDK validates your license before rendering the editor UI. Validation checks:
+- License expiration date
+- Revocation status
+- Active status
+- Domain allowlist
+
+**Default API:** `https://api.kloudleads.com/license/validate`
+
+**Custom API Example:**
+```typescript
+<ImageEditor
+  licenseKey="your-jwt-token"
+  apiUrl="https://localhost:3030/social"
+  // ...
+/>
+```
+
+---
+
+### Dynamic Imports (Critical)
+
+Both editors use browser-only APIs and **must** be imported dynamically with `ssr: false`:
+
+```typescript
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }
+);
+
+const VideoEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.VideoEditor })),
+  { ssr: false }
+);
+```
+
+<Warning>
+**Server-Side Rendering (SSR) is not supported.** Always use dynamic imports with `ssr: false` to avoid build errors.
+</Warning>
+
+---
+
+### Theme Customization
+
+Both editors support extensive theming via the `theme` prop:
+
+```typescript
+interface CustomTheme {
+  [key: string]: string;
+}
+
+const customTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'background.tertiary': '#334155',
+  'text.primary': '#ffffff',
+  'text.secondary': '#cbd5e0',
+  'accent.primary': '#3b82f6',
+  'accent.secondary': '#06b6d4',
+  'accent.hover': '#60a5fa',
+  'border.default': '#334155',
+  'border.subtle': '#1e293b',
+  'button.primary': '#3b82f6',
+  'input.background': '#1e293b',
+  'toolbar.background': '#0f172a',
+  'canvas.background': '#1a202c',
+};
+
+<ImageEditor theme={customTheme} showThemeCreator={false} />
+```
+
+**Available Theme Keys:**
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `background.primary` | Main background color | `#0f172a` |
+| `background.secondary` | Secondary panel color | `#1e293b` |
+| `background.tertiary` | Tertiary elements | `#334155` |
+| `text.primary` | Primary text color | `#ffffff` |
+| `text.secondary` | Secondary text color | `#cbd5e0` |
+| `accent.primary` | Primary action color | `#3b82f6` |
+| `accent.secondary` | Secondary action color | `#06b6d4` |
+| `accent.hover` | Hover state color | `#60a5fa` |
+| `border.default` | Default border color | `#334155` |
+| `border.subtle` | Subtle border color | `#1e293b` |
+| `button.primary` | Primary button color | `#3b82f6` |
+| `input.background` | Input field background | `#1e293b` |
+| `toolbar.background` | Toolbar background | `#0f172a` |
+| `canvas.background` | Canvas background | `#1a202c` |
+
+---
+
+### Callbacks
+
+Both editors provide callbacks for key events:
+
+#### Export Callback
+
+Called when user exports their work:
+
+```typescript
+interface CallbackProps {
+  base64: string;        // Data URL of exported content
+  width: number;         // Canvas width
+  height: number;        // Canvas height
+  template?: any;        // Scene data (if template used)
+}
+
+interface EditorExtras {
+  thumbnail?: string;    // Thumbnail preview
+  format?: string;       // Export format
+}
+
+callback?: (result: CallbackProps, extras?: EditorExtras) => void;
+```
+
+**Example:**
+```typescript
+const handleExport = (result: CallbackProps, extras?: EditorExtras) => {
+  console.log('Exported:', result);
+
+  // Download
+  const link = document.createElement('a');
+  link.href = result.base64;
+  link.download = 'edited-image.png';
+  link.click();
+
+  // Or upload to server
+  fetch('/api/upload', {
+    method: 'POST',
+    body: JSON.stringify({ image: result.base64 }),
+  });
+};
+```
+
+#### Close Callback
+
+Called when user closes the editor:
+
+```typescript
+onClose: () => void;  // Required
+```
+
+**Example:**
+```typescript
+const handleClose = () => {
+  setShowEditor(false);
+  setSelectedFile(null);
+};
+```
+
+---
+
+### Template System
+
+Both editors support saving and loading templates:
+
+```typescript
+interface Template {
+  id?: string;
+  name?: string;
+  sceneData: EditorItem[];  // All canvas elements
+  width: number;
+  height: number;
+  thumbnail?: string;
+  brandId?: string;
+}
+
+// Save template callback
+onSaveTemplate?: (props: {
+  brandId: string;
+  template: Template
+}) => Promise<void>;
+
+// Load templates callback
+onGetTemplates?: (brandIdList?: string[]) => Promise<{
+  success: { data: Template[] }
+}>;
+```
+
+**Example:**
+```typescript
+const handleSaveTemplate = async ({ brandId, template }) => {
+  const response = await fetch('/api/templates', {
+    method: 'POST',
+    body: JSON.stringify({ brandId, template }),
+  });
+  return response.json();
+};
+
+const handleGetTemplates = async (brandIds) => {
+  const response = await fetch('/api/templates?' + new URLSearchParams({
+    brandIds: brandIds?.join(',') || ''
+  }));
+  return response.json();
+};
+```
+
+---
+
+### Brand Presets
+
+Both editors support brand presets for consistent styling:
+
+```typescript
+interface BrandDetails {
+  id: string;
+  name: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontFamily?: string;
+  logo?: string;
+}
+
+brands?: BrandDetails[];
+```
+
+---
+
+### Headless Mode
+
+Run editors programmatically without UI:
+
+```typescript
+headless?: boolean;
+calls?: CallItem[];  // Array of functions to execute
+
+<ImageEditor
+  headless={true}
+  files={imageFile}
+  calls={[
+    () => handleAddText(['Headline']),
+    () => handleAddShape('rectangle'),
+    () => applyFilter('grayscale'),
+  ]}
+  callback={(result) => console.log('Done:', result)}
+/>
+```
+
+---
+
+## Type Definitions
+
+### EditorItem
+
+Core data structure for all canvas elements:
+
+```typescript
+interface EditorItem {
+  id: string;
+  type: "image" | "text" | "shape" | "video" | "audio" | "subtitle" | "gif" | "sticker";
+
+  // Position & dimensions
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+
+  // Type-specific properties
+  image?: HTMLImageElement;
+  text?: string;
+  shapeType?: string;
+  video?: string;
+  audio?: string;
+
+  // Styling
+  fillColor?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+
+  // Effects
+  filter?: string;
+  blur?: number;
+  brightness?: number;
+  contrast?: number;
+  grayscale?: boolean;
+  sepia?: boolean;
+}
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ImageEditor API" icon="image" href="/api-reference/image-editor">
+    Complete ImageEditor props and methods
+  </Card>
+  <Card title="VideoEditor API" icon="video" href="/api-reference/video-editor">
+    Complete VideoEditor props and methods
+  </Card>
+</CardGroup>

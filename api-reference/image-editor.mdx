@@ -1,0 +1,433 @@
+---
+title: 'ImageEditor'
+description: 'Complete API reference for the ImageEditor component'
+---
+
+## Overview
+
+The `ImageEditor` component provides a powerful image editing interface with support for filters, effects, text, shapes, and more.
+
+---
+
+## Import
+
+```typescript
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }
+);
+```
+
+<Warning>
+Always use dynamic import with `ssr: false` to avoid server-side rendering issues.
+</Warning>
+
+---
+
+## Props
+
+### Required Props
+
+<ParamField path="licenseKey" type="string" required>
+  Your SDK license key (JWT format). Contact your account manager to obtain a license key.
+
+  ```typescript
+  licenseKey="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+</ParamField>
+
+<ParamField path="onClose" type="() => void" required>
+  Callback function called when the user closes the editor.
+
+  ```typescript
+  onClose={() => setShowEditor(false)}
+  ```
+</ParamField>
+
+---
+
+### Optional Props
+
+<ParamField path="apiUrl" type="string">
+  Override the default license validation API endpoint.
+
+  **Default:** `https://api.kloudleads.com/license/validate`
+
+  ```typescript
+  apiUrl="https://localhost:3030/social"
+  ```
+
+  <Note>
+    The SDK appends `/license/validate` to this URL. If your endpoint is `https://localhost:3030/social/license/validate`, use `apiUrl="https://localhost:3030/social"`.
+  </Note>
+</ParamField>
+
+<ParamField path="files" type="File">
+  Initial image file to load into the editor.
+
+  ```typescript
+  const [file, setFile] = useState<File | null>(null);
+
+  <ImageEditor
+    files={file}
+    // ...
+  />
+  ```
+</ParamField>
+
+<ParamField path="callback" type="(result: CallbackProps, extras?: EditorExtras) => void">
+  Callback function called when the user exports the edited image.
+
+  **CallbackProps:**
+  ```typescript
+  interface CallbackProps {
+    base64: string;        // Data URL of exported image
+    width: number;         // Canvas width
+    height: number;        // Canvas height
+    template?: any;        // Scene data if template used
+  }
+  ```
+
+  **EditorExtras:**
+  ```typescript
+  interface EditorExtras {
+    thumbnail?: string;    // Thumbnail preview
+    format?: string;       // Image format (png, jpg, etc)
+  }
+  ```
+
+  **Example:**
+  ```typescript
+  const handleExport = (result: CallbackProps, extras?: EditorExtras) => {
+    // Download the image
+    const link = document.createElement('a');
+    link.href = result.base64;
+    link.download = 'edited-image.png';
+    link.click();
+
+    // Or upload to server
+    fetch('/api/upload', {
+      method: 'POST',
+      body: JSON.stringify({ image: result.base64 }),
+    });
+  };
+  ```
+</ParamField>
+
+<ParamField path="theme" type="Record<string, string>">
+  Custom theme object to override default colors and styling.
+
+  ```typescript
+  const customTheme = {
+    'background.primary': '#0f172a',
+    'background.secondary': '#1e293b',
+    'text.primary': '#ffffff',
+    'accent.primary': '#3b82f6',
+  };
+
+  <ImageEditor theme={customTheme} />
+  ```
+
+  See [Theme Customization](/api-reference/introduction#theme-customization) for all available keys.
+</ParamField>
+
+<ParamField path="showThemeCreator" type="boolean" default="false">
+  Show theme customization UI to users. Set to `false` for production.
+
+  ```typescript
+  showThemeCreator={false}  // Hide theme UI
+  ```
+</ParamField>
+
+<ParamField path="headless" type="boolean" default="false">
+  Enable headless (programmatic) mode. The editor will execute predefined functions without showing the UI.
+
+  ```typescript
+  <ImageEditor
+    headless={true}
+    calls={[
+      () => handleAddText(['Headline']),
+      () => handleAddShape('rectangle'),
+    ]}
+  />
+  ```
+</ParamField>
+
+<ParamField path="calls" type="CallItem[]">
+  Array of functions to execute in headless mode.
+
+  ```typescript
+  calls={[
+    () => handleAddText(['Text 1', 'Text 2']),
+    () => handleAddShape('rectangle'),
+    () => applyFilter('grayscale'),
+  ]}
+  ```
+</ParamField>
+
+<ParamField path="brands" type="BrandDetails[]">
+  Array of brand presets for consistent styling.
+
+  ```typescript
+  interface BrandDetails {
+    id: string;
+    name: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    fontFamily?: string;
+    logo?: string;
+  }
+
+  const brands = [
+    {
+      id: 'brand-1',
+      name: 'My Brand',
+      primaryColor: '#3b82f6',
+      fontFamily: 'Inter',
+    },
+  ];
+
+  <ImageEditor brands={brands} />
+  ```
+</ParamField>
+
+<ParamField path="defaultTemplate" type="Template">
+  Load a template on editor startup.
+
+  ```typescript
+  interface Template {
+    id?: string;
+    name?: string;
+    sceneData: EditorItem[];
+    width: number;
+    height: number;
+    thumbnail?: string;
+    brandId?: string;
+  }
+
+  <ImageEditor defaultTemplate={myTemplate} />
+  ```
+</ParamField>
+
+<ParamField path="onExport" type="(templateId: string, brandResults: any, updatedImage: string, thumbUri: string) => void">
+  Advanced export callback with additional metadata.
+
+  ```typescript
+  const handleExport = (templateId, brandResults, updatedImage, thumbUri) => {
+    console.log('Template ID:', templateId);
+    console.log('Brand results:', brandResults);
+    console.log('Image:', updatedImage);
+    console.log('Thumbnail:', thumbUri);
+  };
+  ```
+</ParamField>
+
+<ParamField path="onSaveTemplate" type="(props: { brandId: string; template: Template }) => Promise<void>">
+  Callback when user saves a template.
+
+  ```typescript
+  const handleSaveTemplate = async ({ brandId, template }) => {
+    await fetch('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ brandId, template }),
+    });
+  };
+  ```
+</ParamField>
+
+<ParamField path="onGetTemplates" type="(brandIdList?: string[]) => Promise<{ success: { data: Template[] } }>">
+  Callback to fetch templates for display.
+
+  ```typescript
+  const handleGetTemplates = async (brandIds) => {
+    const response = await fetch('/api/templates?' + new URLSearchParams({
+      brandIds: brandIds?.join(',') || ''
+    }));
+    return response.json();
+  };
+  ```
+</ParamField>
+
+<ParamField path="createAutomatedContent" type="CreateAutomatedContent">
+  AI-powered content creation function (advanced feature).
+</ParamField>
+
+---
+
+## Complete Example
+
+```typescript
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
+
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }
+);
+
+const customTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+};
+
+export default function ImageStudioPage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedImage, setExportedImage] = useState<string | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = useCallback((result: any) => {
+    if (result.base64) {
+      setExportedImage(result.base64);
+      setShowEditor(false);
+
+      // Download
+      const link = document.createElement('a');
+      link.href = result.base64;
+      link.download = `edited-${Date.now()}.png`;
+      link.click();
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShowEditor(false);
+    setSelectedFile(null);
+  };
+
+  return (
+    <div className="min-h-screen p-6">
+      {!showEditor && (
+        <div>
+          <h1 className="text-3xl font-bold mb-4">Image Studio</h1>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg"
+          >
+            Choose Image
+          </button>
+        </div>
+      )}
+
+      {showEditor && selectedFile && (
+        <div className="fixed inset-0 z-50">
+          <ImageEditor
+            licenseKey={process.env.NEXT_PUBLIC_LICENSE_KEY || ''}
+            apiUrl="https://localhost:3030/social"
+            files={selectedFile}
+            onClose={handleClose}
+            callback={handleExport}
+            theme={customTheme}
+            showThemeCreator={false}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## Features
+
+### Image Editing
+
+- **Upload & Load:** Support for JPG, PNG, GIF, WebP
+- **Resize:** Custom dimensions or preset aspect ratios
+- **Crop:** Freeform or ratio-locked cropping
+- **Rotate:** 90° increments or custom angles
+- **Flip:** Horizontal and vertical flipping
+
+### Effects & Filters
+
+- **Color Filters:** Grayscale, Sepia, Invert, Colorize
+- **Adjustments:** Brightness, Contrast, Saturation, Hue
+- **Blur:** Gaussian blur with adjustable radius
+- **Artistic:** Pixelate, Noise, Emboss, Posterize
+- **Shadows:** Drop shadows with offset, blur, color
+
+### Text
+
+- **Rich Text:** Multiple fonts, sizes, colors, weights
+- **Google Fonts:** Dynamic font loading
+- **Formatting:** Bold, italic, underline, alignment
+- **Effects:** Shadows, outlines, backgrounds
+
+### Shapes
+
+- **Basic Shapes:** Rectangle, Circle, Triangle, Star, Arrow
+- **Customization:** Fill color, stroke, stroke width
+- **Advanced:** Custom paths and SVG shapes
+
+### Layers
+
+- **Multi-layer Support:** Unlimited layers
+- **Z-Index Control:** Bring forward, send backward
+- **Layer Management:** Show/hide, lock, duplicate, delete
+
+### Background
+
+- **Solid Colors:** Any color picker
+- **Gradients:** Linear and radial gradients
+- **Images:** Background image with fit modes
+
+### Export
+
+- **Formats:** PNG, JPG, WebP
+- **Quality:** Adjustable compression
+- **Dimensions:** Original or custom size
+
+---
+
+## Browser Support
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+
+
+<Warning>
+Mobile browsers have limited support. Desktop browsers recommended for best experience.
+</Warning>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Integration Guide" icon="book" href="/integration-guides/nextjs-image-editor">
+    Step-by-step Next.js integration
+  </Card>
+  <Card title="VideoEditor API" icon="video" href="/api-reference/video-editor">
+    VideoEditor component reference
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting/faq">
+    Common issues and solutions
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first editor
+  </Card>
+</CardGroup>

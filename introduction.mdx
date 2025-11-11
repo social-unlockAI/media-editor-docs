@@ -1,0 +1,316 @@
+# Media Editor SDK - Next.js Documentation
+
+Welcome to the Next.js integration documentation for `@distralabs/media-editor`.
+
+## Overview
+
+The `@distralabs/media-editor` SDK provides powerful image and video editing capabilities for React applications. This documentation covers everything you need to integrate the SDK into your Next.js project.
+
+## Documentation Files
+
+### Integration Guides
+
+1. **[NEXTJS_IMAGEEDITOR_INTEGRATION.md](./next/NEXTJS_IMAGEEDITOR_INTEGRATION.md)**
+   - Complete guide for ImageEditor integration
+   - Interface documentation and prop reference
+   - Theme customization examples
+   - Step-by-step implementation
+   - Callback handling and export options
+
+2. **[NEXTJS_VIDEOEDITOR_INTEGRATION.md](./next/NEXTJS_VIDEOEDITOR_INTEGRATION.md)**
+   - Complete guide for VideoEditor integration
+   - WASM setup instructions (critical!)
+   - Video processing workflow
+   - Performance considerations
+   - Export and encoding options
+
+### Troubleshooting
+
+3. **[FAQ.md](./next/FAQ.md)**
+   - Common issues and solutions
+   - React version compatibility problems
+   - License validation errors
+   - WASM loading failures
+   - Build and deployment issues
+   - Quick troubleshooting checklist
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install @distralabs/media-editor@1.1.9
+npm install next@14.2.15 react@18.2.0 react-dom@18.2.0
+npm install framer-motion lucide-react
+```
+
+### 2. Configure Next.js
+
+**next.config.js:**
+```javascript
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+      fs: false,
+    };
+    return config;
+  },
+};
+
+module.exports = nextConfig;
+```
+
+### 3. Import SDK Styles
+
+**app/globals.css:**
+```css
+@import "@distralabs/media-editor/dist/index.css";
+```
+
+### 4. Use Dynamic Imports
+
+```typescript
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }
+);
+```
+
+### 5. Copy WASM Files (Video Only)
+
+```bash
+mkdir -p public
+cp node_modules/@distralabs/media-editor/dist/MediaInfoModule.wasm public/
+cp node_modules/@distralabs/media-editor/dist/*.js public/
+cp -r node_modules/@distralabs/media-editor/dist/umd public/
+```
+
+## Key Concepts
+
+### Why React 18.2.0?
+
+The SDK is built with React 18.2.0, which is not compatible with React 19. Next.js 15+ requires React 19, so you must use **Next.js 14.2.15** with **React 18.2.0**.
+
+### Why Dynamic Imports?
+
+The SDK uses browser-only APIs (Canvas, WebAssembly, Web Workers) that don't exist during server-side rendering. Dynamic imports with `ssr: false` ensure the SDK only loads in the browser.
+
+### Why WASM Files?
+
+VideoEditor uses FFmpeg (compiled to WebAssembly) for video processing. These WASM modules (33MB total) must be in your `public/` folder so the browser can load them at runtime.
+
+### Theme System
+
+Both editors support extensive theming through the `theme` prop. You can customize:
+- Background colors (primary, secondary, tertiary)
+- Text colors (primary, secondary)
+- Accent colors (primary, secondary, hover)
+- Border colors
+- Component-specific colors (buttons, inputs, toolbar, canvas, etc.)
+
+## Architecture
+
+```
+Your Next.js App
+├── app/
+│   ├── globals.css          # Import SDK styles here
+│   ├── layout.tsx           # Root layout
+│   └── studio/
+│       ├── theme.ts         # Shared theme configuration
+│       ├── image/
+│       │   └── page.tsx     # ImageEditor page
+│       └── video/
+│           └── page.tsx     # VideoEditor page
+├── public/
+│   ├── MediaInfoModule.wasm # Video processing (2.3 MB)
+│   ├── worker.js            # FFmpeg worker
+│   ├── decode_worker.js     # Video decoder
+│   ├── encode_worker.js     # Video encoder
+│   └── umd/
+│       └── ffmpeg-core.wasm # FFmpeg core (31 MB)
+└── next.config.js           # Configure webpack and rewrites
+```
+
+## Common Patterns
+
+### File Upload with Preview
+
+```typescript
+const [file, setFile] = useState<File | null>(null);
+const [showEditor, setShowEditor] = useState(false);
+
+const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const selectedFile = e.target.files?.[0];
+  if (selectedFile) {
+    setFile(selectedFile);
+    setShowEditor(true);
+  }
+};
+
+return (
+  <>
+    <input type="file" accept="image/*" onChange={handleFileSelect} />
+    {showEditor && file && (
+      <ImageEditor
+        licenseKey="YOUR_KEY"
+        files={file}
+        onClose={() => setShowEditor(false)}
+        callback={(result) => {
+          console.log('Exported:', result.base64);
+        }}
+      />
+    )}
+  </>
+);
+```
+
+### Export and Download
+
+```typescript
+const handleExport = useCallback((result: any) => {
+  // Create download link
+  const link = document.createElement('a');
+  link.href = result.base64 || result.videoUrl;
+  link.download = `edited-${Date.now()}.${result.videoUrl ? 'mp4' : 'png'}`;
+  link.click();
+
+  // Or upload to server
+  fetch('/api/upload', {
+    method: 'POST',
+    body: JSON.stringify({ data: result.base64 }),
+    headers: { 'Content-Type': 'application/json' }
+  });
+}, []);
+```
+
+### Custom Theme
+
+```typescript
+const theme = {
+  'background.primary': '#0f172a',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+  'accent.secondary': '#06b6d4',
+  'border.default': '#334155',
+};
+
+<ImageEditor theme={theme} showThemeCreator={false} />
+```
+
+## Example Project
+
+A complete working example is available in the SDK package at `examples/nextjs/`.
+
+This includes:
+- Landing page with studio selection
+- Image Studio with drag-and-drop
+- Video Studio with export modal
+- Custom branded theme implementation
+- Proper file handling and state management
+
+## API Reference
+
+### ImageEditor Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `licenseKey` | `string` | ✅ | JWT license key |
+| `onClose` | `() => void` | ✅ | Close callback |
+| `apiUrl` | `string` | ❌ | API endpoint override |
+| `files` | `File` | ❌ | Initial image file |
+| `callback` | `(result, extras?) => void` | ❌ | Export callback |
+| `theme` | `Record<string, string>` | ❌ | Custom theme |
+| `showThemeCreator` | `boolean` | ❌ | Show theme UI |
+
+### VideoEditor Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `licenseKey` | `string` | ✅ | JWT license key |
+| `onClose` | `() => void` | ✅ | Close callback |
+| `apiUrl` | `string` | ❌ | API endpoint override |
+| `defaultVideo` | `File` | ❌ | Initial video file |
+| `onExport` | `(result) => void` | ❌ | Export callback |
+| `theme` | `Record<string, string>` | ❌ | Custom theme |
+| `showThemeCreator` | `boolean` | ❌ | Show theme UI |
+
+## Performance Tips
+
+### Image Editor
+- ✅ Fast load time (~500ms)
+- ✅ Works on mobile devices
+- ✅ Low memory usage (<100MB)
+- ✅ Instant export
+
+### Video Editor
+- ⚠️ Longer load time (~2s) due to WASM
+- ⚠️ Desktop only (mobile not supported)
+- ⚠️ High memory usage (500MB+ for HD video)
+- ⚠️ Slow export (1-2 minutes for 30s 1080p video)
+
+**Recommendations:**
+1. Show loading indicators during export
+2. Warn users about processing time
+3. Recommend shorter clips or lower resolution
+4. Consider server-side processing for production apps
+
+## Version Compatibility
+
+| Next.js | React | SDK | Status |
+|---------|-------|-----|--------|
+| 15.x | 19.x | 1.1.9 | ❌ Not Compatible |
+| 14.2.x | 18.2 | 1.1.9 | ✅ Recommended |
+| 14.0.x | 18.2 | 1.1.9 | ✅ Compatible |
+| 13.x | 18.2 | 1.1.9 | ⚠️ Not Tested |
+
+## Support
+
+### Documentation
+- **Integration Guides**: This folder
+- **API Docs**: Coming soon
+- **Video Tutorials**: Coming soon
+
+### Getting Help
+- 📧 Email: support@distralabs.com
+- 💬 Support Portal: Contact your account manager
+- 📚 Docs: https://docs.distralabs.com
+
+### Reporting Bugs
+
+Please include:
+1. Next.js version
+2. React version
+3. SDK version
+4. Error messages
+5. Steps to reproduce
+6. Browser/OS information
+
+## License
+
+The `@distralabs/media-editor` SDK is commercial software. See [EULA.md](../EULA.md) for license terms.
+
+## Changelog
+
+### v1.1.9 (Current)
+- Next.js 14 compatibility
+- React 18.2 support
+- Theme customization
+- Video timeline improvements
+- Bug fixes
+
+---
+
+**Ready to get started?**
+
+Choose your integration guide:
+- [ImageEditor Integration →](./next/NEXTJS_IMAGEEDITOR_INTEGRATION.md)
+- [VideoEditor Integration →](./next/NEXTJS_VIDEOEDITOR_INTEGRATION.md)
+
+**Having issues?**
+- [Check the FAQ →](./next/FAQ.md)

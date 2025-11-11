@@ -1,0 +1,593 @@
+# Next.js Integration FAQ
+
+Frequently asked questions and common issues when integrating `@distralabs/media-editor` with Next.js.
+
+## Table of Contents
+- [React Version Issues](#react-version-issues)
+- [Module Resolution Errors](#module-resolution-errors)
+- [License Validation Problems](#license-validation-problems)
+- [WASM Loading Failures](#wasm-loading-failures)
+- [UI/Styling Issues](#uistyling-issues)
+- [Video Processing Issues](#video-processing-issues)
+- [Build and Deployment](#build-and-deployment)
+
+---
+
+## React Version Issues
+
+### Error: "Cannot read properties of undefined (reading 'ReactCurrentOwner')"
+
+**Cause:** Next.js 15+ requires React 19, but the media-editor SDK requires React 18.2.0. This creates a version conflict.
+
+**Solution:**
+
+Downgrade to Next.js 14.2.15 which supports React 18:
+
+```bash
+npm install next@14.2.15 react@18.2.0 react-dom@18.2.0
+npm install -D eslint@^8 eslint-config-next@14.2.15
+```
+
+Update **package.json**:
+```json
+{
+  "dependencies": {
+    "next": "14.2.15",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15",
+    "@types/react": "^18",
+    "@types/react-dom": "^18"
+  },
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}
+```
+
+### Error: TypeScript Config Not Supported
+
+**Cause:** Next.js 14 doesn't support `next.config.ts` (TypeScript config).
+
+**Solution:**
+
+Rename `next.config.ts` to `next.config.js`:
+```bash
+mv next.config.ts next.config.js
+```
+
+### Error: Font "Geist" Not Found
+
+**Cause:** Geist font is only available in Next.js 15+.
+
+**Solution:**
+
+Use a standard Google Font like Inter:
+
+```typescript
+// app/layout.tsx
+import { Inter } from "next/font/google";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body className={inter.className}>
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## Module Resolution Errors
+
+### Error: "Module not found: Can't resolve '@distralabs/media-editor'"
+
+**Cause:** Package not installed or path aliases conflicting.
+
+**Solution 1 - Verify Installation:**
+```bash
+npm list @distralabs/media-editor
+# Should show: @distralabs/media-editor@1.1.9
+
+# If not found:
+npm install @distralabs/media-editor@1.1.9
+```
+
+**Solution 2 - Remove Path Aliases:**
+
+Check `next.config.js` and remove any custom path aliases that might conflict:
+
+```javascript
+// WRONG - removes custom aliases
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias['@distralabs/media-editor'] = '...';
+    return config;
+  }
+};
+
+// CORRECT - only disable browser-incompatible modules
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+      fs: false,
+    };
+    return config;
+  },
+};
+```
+
+### Error: "Module not found: Can't resolve './Users/Deep/media-editor/dist/...'"
+
+**Cause:** Old path aliases or `file:..` dependency reference still in package.json.
+
+**Solution:**
+
+1. Remove any `file:` references from package.json
+2. Use the published npm package:
+```json
+{
+  "dependencies": {
+    "@distralabs/media-editor": "^1.1.9"  // NOT "file:.."
+  }
+}
+```
+
+3. Clean and reinstall:
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+## License Validation Problems
+
+### Error: "License Validation Failed - Failed to validate license"
+
+**Cause 1:** CORS blocking the license validation API.
+
+**Solution:**
+Use your local API endpoint instead of the remote one:
+
+```typescript
+<ImageEditor
+  licenseKey="YOUR_KEY"
+  apiUrl="https://localhost:3030/social"  // Use your local backend
+  // ...
+/>
+```
+
+**Cause 2:** Wrong API endpoint path.
+
+**Solution:**
+The SDK appends `/license/validate` to the `apiUrl`. Verify your backend endpoint:
+
+- If your endpoint is `https://localhost:3030/social/license/validate`
+- Then use `apiUrl="https://localhost:3030/social"`
+
+**Cause 3:** Using http instead of https.
+
+**Solution:**
+```typescript
+// WRONG
+apiUrl="http://localhost:3030/social"
+
+// CORRECT (if your server uses https)
+apiUrl="https://localhost:3030/social"
+```
+
+### Error: "POST http://localhost:3030/social/license/validate net::ERR_EMPTY_RESPONSE"
+
+**Cause:** Backend server not running or certificate issues with https.
+
+**Solution:**
+1. Start your backend server:
+```bash
+cd your-backend-directory
+npm run dev
+```
+
+2. Verify it's accessible:
+```bash
+curl -k https://localhost:3030/social/license/validate
+```
+
+3. If using self-signed certificate, accept it in browser first by visiting the URL directly.
+
+---
+
+## WASM Loading Failures
+
+### Error: "MediaInfoModule.wasm 404 Not Found"
+
+**Cause:** WASM files not copied to public folder or wrong paths.
+
+**Solution 1 - Copy WASM Files:**
+```bash
+# From your Next.js project root
+mkdir -p public
+cp node_modules/@distralabs/media-editor/dist/MediaInfoModule.wasm public/
+cp node_modules/@distralabs/media-editor/dist/worker.js public/
+cp node_modules/@distralabs/media-editor/dist/const.js public/
+cp node_modules/@distralabs/media-editor/dist/errors.js public/
+cp node_modules/@distralabs/media-editor/dist/decode_worker.js public/
+cp node_modules/@distralabs/media-editor/dist/encode_worker.js public/
+cp -r node_modules/@distralabs/media-editor/dist/umd public/
+```
+
+**Solution 2 - Add URL Rewrites:**
+
+If your editor is at `/studio/video`, add rewrites to `next.config.js`:
+
+```javascript
+const nextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: '/studio/:path(MediaInfoModule.wasm|worker.js|const.js|errors.js|decode_worker.js|encode_worker.js)',
+        destination: '/:path',
+      },
+      {
+        source: '/studio/umd/:path*',
+        destination: '/umd/:path*',
+      },
+    ];
+  },
+};
+```
+
+**Solution 3 - Restart Dev Server:**
+
+After adding WASM files or changing config:
+```bash
+# Kill existing process
+pkill -f "next dev"
+
+# Restart
+npm run dev
+```
+
+### Error: "failed to asynchronously prepare wasm: both async and sync fetching of the wasm failed"
+
+**Cause:** Browser can't load WASM file due to wrong path or CORS.
+
+**Solution:**
+1. Open browser DevTools → Network tab
+2. Look for failed requests to WASM files
+3. Check the requested URL vs actual file location
+4. Verify `public/` folder contains all WASM files
+5. Hard refresh browser (Cmd+Shift+R / Ctrl+Shift+R)
+
+---
+
+## UI/Styling Issues
+
+### Issue: Timeline Looks Different in Next.js vs React
+
+**Cause:** SDK CSS not imported.
+
+**Solution:**
+
+Add SDK CSS to your global styles:
+
+**app/globals.css:**
+```css
+@import "tailwindcss";
+
+/* IMPORTANT: Import SDK styles */
+@import "@distralabs/media-editor/dist/index.css";
+
+/* Your other styles below */
+```
+
+### Issue: Editor Theme Not Applied
+
+**Cause:** Theme props not passed correctly or showThemeCreator enabled.
+
+**Solution:**
+```typescript
+const customTheme = {
+  'background.primary': '#0f172a',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+  // ... other theme values
+};
+
+<ImageEditor
+  theme={customTheme}
+  showThemeCreator={false}  // Disable user theme customization
+  // ...
+/>
+```
+
+### Warning: "Each child in a list should have a unique 'key' prop"
+
+**Cause:** React warnings from within the SDK bundle.
+
+**Impact:** These are development warnings only and don't affect functionality.
+
+**Solution:** No action needed. These warnings come from the SDK itself and will not appear in production builds.
+
+---
+
+## Video Processing Issues
+
+### Issue: Video Export Takes Too Long
+
+**Cause:** Video processing is CPU-intensive and happens in the browser.
+
+**Typical Times:**
+- 720p 10s video: ~30 seconds
+- 1080p 30s video: ~2 minutes
+- 4K video: May not work (memory constraints)
+
+**Solutions:**
+1. Show progress indicator to user
+2. Recommend shorter clips or lower resolution
+3. Consider server-side processing for long videos
+
+```typescript
+const [isExporting, setIsExporting] = useState(false);
+
+const handleExport = useCallback((result) => {
+  setIsExporting(false);
+  // Handle result...
+}, []);
+
+// Show loading overlay
+{isExporting && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent" />
+      <p className="text-white mt-4">Exporting video...</p>
+      <p className="text-gray-400 text-sm">This may take 1-2 minutes</p>
+    </div>
+  </div>
+)}
+```
+
+### Issue: Video Export Fails on Mobile
+
+**Cause:** Mobile browsers have limited memory and don't support all WebAssembly features.
+
+**Solution:**
+1. Detect mobile and show warning:
+```typescript
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+if (isMobile) {
+  alert('Video editing is not supported on mobile devices. Please use a desktop browser.');
+  return;
+}
+```
+
+2. Or disable video features on mobile entirely.
+
+### Issue: Audio Missing from Exported Video
+
+**Cause:** Audio processing not enabled or audio track not detected.
+
+**Solution:**
+Verify the source video has audio:
+```typescript
+const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(file);
+    video.addEventListener('loadedmetadata', () => {
+      console.log('Has audio tracks:', video.audioTracks?.length > 0);
+    });
+  }
+};
+```
+
+---
+
+## Build and Deployment
+
+### Error: Build Fails with "window is not defined"
+
+**Cause:** SDK code being executed during SSR (server-side rendering).
+
+**Solution:**
+
+Use dynamic import with `ssr: false`:
+
+```typescript
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }  // CRITICAL: Disable SSR
+);
+```
+
+### Issue: WASM Files Not Included in Build
+
+**Cause:** WASM files in `public/` aren't automatically copied during build.
+
+**Solution:**
+
+WASM files in `public/` are automatically included. Verify with:
+
+```bash
+npm run build
+ls -lh .next/static/media/  # Should contain WASM files
+# OR for public files:
+ls -lh public/              # Should contain WASM files
+```
+
+If missing, add a post-build script in package.json:
+```json
+{
+  "scripts": {
+    "build": "next build",
+    "postbuild": "node scripts/copy-wasm.js"
+  }
+}
+```
+
+**scripts/copy-wasm.js:**
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+const files = [
+  'MediaInfoModule.wasm',
+  'worker.js',
+  'const.js',
+  'errors.js',
+  'decode_worker.js',
+  'encode_worker.js',
+];
+
+files.forEach(file => {
+  const src = path.join(__dirname, '../node_modules/@distralabs/media-editor/dist', file);
+  const dest = path.join(__dirname, '../public', file);
+  fs.copyFileSync(src, dest);
+  console.log(`Copied ${file} to public/`);
+});
+
+// Copy umd directory
+const umdSrc = path.join(__dirname, '../node_modules/@distralabs/media-editor/dist/umd');
+const umdDest = path.join(__dirname, '../public/umd');
+fs.cpSync(umdSrc, umdDest, { recursive: true });
+console.log('Copied umd/ directory to public/');
+```
+
+### Issue: Production Build Much Larger Than Expected
+
+**Cause:** WASM files (particularly ffmpeg-core.wasm at 31MB) increase bundle size.
+
+**Impact:** This is expected. The WASM files are necessary for video processing.
+
+**Optimization:**
+1. Use dynamic imports (already recommended)
+2. Lazy load video features only when needed
+3. Consider code splitting:
+
+```typescript
+const ImageEditor = dynamic(() => import('./editors/ImageEditor'), { ssr: false });
+const VideoEditor = dynamic(() => import('./editors/VideoEditor'), { ssr: false });
+
+// Only load VideoEditor when user navigates to video page
+```
+
+---
+
+## Environment-Specific Issues
+
+### Development vs Production Differences
+
+**Issue:** Works in dev but fails in production.
+
+**Common Causes:**
+1. Environment variables not set in production
+2. API URLs hardcoded to localhost
+3. CORS policies different in production
+
+**Solution:**
+
+Use environment variables:
+
+**.env.local:**
+```bash
+NEXT_PUBLIC_API_URL=https://localhost:3030/social
+NEXT_PUBLIC_LICENSE_KEY=your_key_here
+```
+
+**.env.production:**
+```bash
+NEXT_PUBLIC_API_URL=https://api.yoursite.com/social
+NEXT_PUBLIC_LICENSE_KEY=your_production_key
+```
+
+**Usage:**
+```typescript
+<ImageEditor
+  licenseKey={process.env.NEXT_PUBLIC_LICENSE_KEY}
+  apiUrl={process.env.NEXT_PUBLIC_API_URL}
+  // ...
+/>
+```
+
+### Issue: Memory Leaks During Development
+
+**Cause:** Hot Module Replacement (HMR) doesn't clean up WASM modules.
+
+**Solution:**
+
+Restart dev server periodically:
+```bash
+pkill -f "next dev"
+npm run dev
+```
+
+Or disable Fast Refresh for editor pages if needed (not recommended).
+
+---
+
+## Getting Help
+
+If your issue isn't covered here:
+
+1. **Check Browser Console**: Most issues show detailed errors
+2. **Check Network Tab**: Look for failed requests (404s, CORS errors)
+3. **Verify Setup**: Follow integration guides step-by-step
+4. **Example Project**: Compare your code with the included example
+5. **Support Portal**: Contact your account manager or support@distralabs.com
+6. **Documentation**: https://docs.distralabs.com
+
+### Providing Helpful Bug Reports
+
+When reporting issues, include:
+1. Next.js version (`npm list next`)
+2. React version (`npm list react`)
+3. SDK version (`npm list @distralabs/media-editor`)
+4. Full error message from console
+5. Network tab screenshot (if relevant)
+6. Minimal reproduction code
+
+---
+
+## Quick Checklist
+
+Before asking for help, verify:
+
+- [ ] Using Next.js 14.2.15 (not 15+)
+- [ ] Using React 18.2.0 (not 19)
+- [ ] SDK installed: `@distralabs/media-editor@1.1.9`
+- [ ] SDK CSS imported in globals.css
+- [ ] Dynamic import with `ssr: false` used
+- [ ] WASM files copied to `public/` folder
+- [ ] URL rewrites added to `next.config.js` (if needed)
+- [ ] Dev server restarted after config changes
+- [ ] Hard refreshed browser (Cmd+Shift+R)
+- [ ] License key and API URL correct
+- [ ] Backend server running (if using local API)
+
+---
+
+## Version Compatibility Matrix
+
+| Next.js | React | SDK     | Status |
+|---------|-------|---------|--------|
+| 15.x    | 19.x  | 1.1.9   | ❌ Not Compatible |
+| 14.2.x  | 18.2  | 1.1.9   | ✅ Recommended |
+| 14.0.x  | 18.2  | 1.1.9   | ✅ Compatible |
+| 13.x    | 18.2  | 1.1.9   | ⚠️ Not Tested |
+
+---
+
+Last Updated: November 2025

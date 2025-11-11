@@ -1,0 +1,202 @@
+---
+title: 'Quickstart'
+description: 'Get started with Media Editor SDK in under 5 minutes'
+---
+
+## Quick Installation
+
+Get up and running with the Media Editor SDK in your Next.js application.
+
+### 1. Install the Package
+
+<CodeGroup>
+
+```bash npm
+npm install @distralabs/media-editor@1.1.9
+```
+
+```bash yarn
+yarn add @distralabs/media-editor@1.1.9
+```
+
+```bash pnpm
+pnpm add @distralabs/media-editor@1.1.9
+```
+
+</CodeGroup>
+
+### 2. Install Dependencies
+
+```bash
+npm install next@14.2.15 react@18.2.0 react-dom@18.2.0
+npm install framer-motion lucide-react
+```
+
+<Warning>
+The SDK requires **React 18.2.0** and is not compatible with React 19. You must use **Next.js 14.2.15** or lower.
+</Warning>
+
+### 3. Configure Next.js
+
+Create or update **next.config.js**:
+
+```javascript next.config.js
+const nextConfig = {
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+      fs: false,
+    };
+    return config;
+  },
+};
+
+module.exports = nextConfig;
+```
+
+### 4. Import SDK Styles
+
+Add to **app/globals.css**:
+
+```css app/globals.css
+@import "tailwindcss";
+
+/* Import SDK styles */
+@import "@distralabs/media-editor/dist/index.css";
+```
+
+### 5. Create Your First Editor
+
+**app/studio/page.tsx:**
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import dynamic from 'next/dynamic';
+
+const ImageEditor = dynamic(
+  () => import('@distralabs/media-editor').then(mod => ({ default: mod.ImageEditor })),
+  { ssr: false }
+);
+
+export default function StudioPage() {
+  const [file, setFile] = useState<File | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile && selectedFile.type.startsWith('image/')) {
+      setFile(selectedFile);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = (result: any) => {
+    console.log('Exported image:', result.base64);
+    // Download or upload the result
+    const link = document.createElement('a');
+    link.href = result.base64;
+    link.download = 'edited-image.png';
+    link.click();
+  };
+
+  return (
+    <div className="min-h-screen p-6">
+      {!showEditor && (
+        <div>
+          <h1 className="text-3xl font-bold mb-4">Image Studio</h1>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="mb-4"
+          />
+        </div>
+      )}
+
+      {showEditor && file && (
+        <div className="fixed inset-0 z-50">
+          <ImageEditor
+            licenseKey="YOUR_LICENSE_KEY_HERE"
+            apiUrl="https://localhost:3030/social"
+            files={file}
+            onClose={() => setShowEditor(false)}
+            callback={handleExport}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 6. Get Your License Key
+
+Contact your account manager or email [support@distralabs.com](mailto:support@distralabs.com) to obtain your license key.
+
+Replace `YOUR_LICENSE_KEY_HERE` with your actual JWT license key.
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="ImageEditor Integration"
+    icon="image"
+    href="/integration-guides/nextjs-image-editor"
+  >
+    Complete guide for integrating the ImageEditor component
+  </Card>
+  <Card
+    title="VideoEditor Integration"
+    icon="video"
+    href="/integration-guides/nextjs-video-editor"
+  >
+    Complete guide for integrating the VideoEditor component
+  </Card>
+  <Card
+    title="API Reference"
+    icon="code"
+    href="/api-reference/image-editor"
+  >
+    Detailed API documentation for all components
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="wrench"
+    href="/troubleshooting/faq"
+  >
+    Common issues and solutions
+  </Card>
+</CardGroup>
+
+---
+
+## Demo Application
+
+Check out our example Next.js application in the SDK package at `examplenextjs/` for a complete working implementation with:
+
+- Landing page with studio selection
+- Image Studio with drag-and-drop
+- Video Studio with export modal
+- Custom branded theme implementation
+- Proper file handling and state management
+
+---
+
+## Support
+
+Need help? We're here for you:
+
+- 📧 Email: [support@distralabs.com](mailto:support@distralabs.com)
+- 📚 Documentation: [https://docs.distralabs.com](https://docs.distralabs.com)
+- 💬 Contact your account manager
+
+---
+
+<Tip>
+For production deployments, make sure to use environment variables for your license key and API URL.
+</Tip>

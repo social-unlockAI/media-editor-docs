@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Media Editor SDK",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#3b82f6",
+    "light": "#60a5fa",
+    "dark": "#2563eb",
+    "anchors": {
+      "from": "#3b82f6",
+      "to": "#06b6d4"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "mailto:support@distralabs.com"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get License",
+    "url": "https://distralabs.com"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "Documentation",
+      "icon": "book-open-cover",
+      "url": "https://docs.distralabs.com"
+    },
+    {
+      "name": "Community",
+      "icon": "discord",
+      "url": "https://discord.gg/distralabs"
+    },
+    {
+      "name": "Blog",
+      "icon": "newspaper",
+      "url": "https://distralabs.com/blog"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "introduction",
+        "quickstart",
+        "installation"
+      ]
+    },
+    {
+      "group": "Integration Guides",
+      "pages": [
+        "integration-guides/nextjs-image-editor",
+        "integration-guides/nextjs-video-editor"
+      ]
+    },
+    {
+      "group": "Troubleshooting",
+      "pages": [
+        "troubleshooting/faq"
+      ]
+    },
+    {
+      "group": "API Documentation",
+      "pages": [
+        "api-reference/introduction",
+        "api-reference/image-editor",
+        "api-reference/video-editor"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/distralabs",
+    "github": "https://github.com/distralabs",
+    "linkedin": "https://www.linkedin.com/company/distralabs"
+  }
+}
