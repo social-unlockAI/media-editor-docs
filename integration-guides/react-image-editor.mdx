@@ -1,0 +1,395 @@
+---
+title: 'React.js ImageEditor Integration'
+description: 'Complete guide for integrating the ImageEditor component into your React application'
+icon: 'react'
+---
+
+<Note>
+This guide is for **React.js** applications (Create React App, Vite, custom setups).
+
+For **Next.js**, see the [Next.js ImageEditor Integration](/integration-guides/nextjs-image-editor) guide.
+</Note>
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Node.js 16+" icon="node-js">
+    Node.js version 16.x or higher
+  </Card>
+  <Card title="React 18.2.0" icon="react">
+    React version 18.2.0 (not React 19)
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Steps>
+  <Step title="Install the SDK">
+    ```bash
+    npm install @distralabs/media-editor
+    ```
+  </Step>
+
+  <Step title="Install Required Dependencies">
+    ```bash
+    npm install framer-motion lucide-react
+    ```
+  </Step>
+
+  <Step title="Verify React Version">
+    Check your React version:
+    ```bash
+    npm list react
+    ```
+
+    If you need to install React 18.2.0:
+    ```bash
+    npm install react@18.2.0 react-dom@18.2.0
+    ```
+  </Step>
+</Steps>
+
+## Basic Setup
+
+### Import SDK Styles
+
+Add the SDK CSS to your application entry point:
+
+<CodeGroup>
+
+```javascript src/index.js
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+
+// Import media-editor SDK styles
+import '@distralabs/media-editor/dist/index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+```javascript src/App.js
+import React from 'react';
+import '@distralabs/media-editor/dist/index.css';
+import './App.css';
+
+function App() {
+  // Your component code
+}
+```
+
+</CodeGroup>
+
+### Import the Editor
+
+```javascript
+import { ImageEditor } from '@distralabs/media-editor';
+```
+
+## ImageEditor Interface
+
+### Core Props
+
+```typescript
+interface ImageEditorProps {
+  // Required
+  licenseKey: string;              // Your SDK license key (JWT)
+  onClose: () => void;             // Called when user closes editor
+
+  // Optional
+  apiUrl?: string;                 // Override license validation API URL
+  files?: File;                    // Initial image file to load
+  callback?: (result: CallbackProps, extras?: EditorExtras) => void;
+  theme?: Record<string, string>;  // Custom theme colors
+  showThemeCreator?: boolean;      // Show theme customization UI
+  headless?: boolean;              // Enable programmatic mode
+  brands?: BrandDetails[];         // Brand presets
+  defaultTemplate?: Template;      // Load template on start
+}
+```
+
+<Accordion title="View Callback Types">
+```typescript
+interface CallbackProps {
+  base64: string;        // Exported image as base64 data URL
+  width: number;         // Canvas width
+  height: number;        // Canvas height
+  template?: any;        // Scene data if template was used
+}
+
+interface EditorExtras {
+  thumbnail?: string;    // Thumbnail preview
+  format?: string;       // Image format (png, jpg, etc)
+}
+```
+</Accordion>
+
+## Step-by-Step Integration
+
+### Step 1: Create Your Component
+
+```javascript src/components/ImageStudio.js
+import React, { useState, useCallback, useRef } from 'react';
+import { ImageEditor } from '@distralabs/media-editor';
+import '@distralabs/media-editor/dist/index.css';
+
+function ImageStudio() {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedImage, setExportedImage] = useState(null);
+
+  // Continue to Step 2...
+}
+
+export default ImageStudio;
+```
+
+### Step 2: Implement File Selection
+
+```javascript
+const handleFileSelect = (e) => {
+  const file = e.target.files?.[0];
+  if (file && file.type.startsWith('image/')) {
+    setSelectedFile(file);
+    setShowEditor(true);
+  }
+};
+
+const handleDrop = (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files?.[0];
+  if (file && file.type.startsWith('image/')) {
+    setSelectedFile(file);
+    setShowEditor(true);
+  }
+};
+```
+
+### Step 3: Implement Callbacks
+
+```javascript
+const handleExport = useCallback((result, extras) => {
+  console.log('Export result:', result, extras);
+
+  if (result.base64) {
+    setExportedImage(result.base64);
+    setShowEditor(false);
+  }
+}, []);
+
+const handleClose = () => {
+  setShowEditor(false);
+  setSelectedFile(null);
+};
+
+const handleDownload = () => {
+  if (exportedImage) {
+    const link = document.createElement('a');
+    link.href = exportedImage;
+    link.download = `edited-image-${Date.now()}.png`;
+    link.click();
+  }
+};
+```
+
+### Step 4: Render the Editor
+
+```javascript
+return (
+  <div className="min-h-screen">
+    {/* Upload UI */}
+    {!showEditor && (
+      <div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
+        <button onClick={() => fileInputRef.current?.click()}>
+          Choose Image
+        </button>
+      </div>
+    )}
+
+    {/* Image Editor */}
+    {showEditor && selectedFile && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 40 }}>
+        <ImageEditor
+          licenseKey="YOUR_LICENSE_KEY_HERE"
+          apiUrl="https://your-api.com/social"
+          files={selectedFile}
+          onClose={handleClose}
+          callback={handleExport}
+          theme={customTheme}
+          showThemeCreator={false}
+        />
+      </div>
+    )}
+  </div>
+);
+```
+
+## Theme Customization
+
+### Creating a Custom Theme
+
+```javascript
+const customTheme = {
+  // Backgrounds
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'background.tertiary': '#334155',
+
+  // Text
+  'text.primary': '#ffffff',
+  'text.secondary': '#cbd5e0',
+
+  // Brand colors
+  'accent.primary': '#3b82f6',
+  'accent.secondary': '#06b6d4',
+  'accent.hover': '#60a5fa',
+
+  // Borders
+  'border.default': '#334155',
+  'border.subtle': '#1e293b',
+
+  // Components
+  'button.primary': '#3b82f6',
+  'input.background': '#1e293b',
+  'toolbar.background': '#0f172a',
+  'canvas.background': '#1a202c',
+};
+```
+
+### Applying the Theme
+
+```javascript
+<ImageEditor
+  licenseKey={licenseKey}
+  files={selectedFile}
+  onClose={handleClose}
+  callback={handleExport}
+  theme={customTheme}
+  showThemeCreator={false}
+/>
+```
+
+## Complete Example
+
+<Accordion title="View Full Component Code">
+```javascript src/components/ImageStudio.js
+import React, { useState, useCallback, useRef } from 'react';
+import { ImageEditor } from '@distralabs/media-editor';
+import '@distralabs/media-editor/dist/index.css';
+import './ImageStudio.css';
+
+const customTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+};
+
+function ImageStudio() {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedImage, setExportedImage] = useState(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = useCallback((result) => {
+    if (result.base64) {
+      setExportedImage(result.base64);
+      setShowEditor(false);
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShowEditor(false);
+    setSelectedFile(null);
+  };
+
+  const handleDownload = () => {
+    if (exportedImage) {
+      const link = document.createElement('a');
+      link.href = exportedImage;
+      link.download = `edited-image-${Date.now()}.png`;
+      link.click();
+    }
+  };
+
+  return (
+    <div className="image-studio">
+      {!showEditor && (
+        <div className="upload-container">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+          <button onClick={() => fileInputRef.current?.click()}>
+            Choose Image
+          </button>
+        </div>
+      )}
+
+      {showEditor && selectedFile && (
+        <div className="editor-overlay">
+          <ImageEditor
+            licenseKey="YOUR_LICENSE_KEY"
+            apiUrl="https://localhost:3030/social"
+            files={selectedFile}
+            onClose={handleClose}
+            callback={handleExport}
+            theme={customTheme}
+            showThemeCreator={false}
+          />
+        </div>
+      )}
+
+      {exportedImage && (
+        <div className="preview">
+          <img src={exportedImage} alt="Edited" />
+          <button onClick={handleDownload}>Download</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ImageStudio;
+```
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Video Editor" icon="video" href="/integration-guides/react-video-editor">
+    Learn how to integrate the VideoEditor component
+  </Card>
+  <Card title="FAQ" icon="circle-question" href="/troubleshooting/faq">
+    Common issues and troubleshooting
+  </Card>
+</CardGroup>
+
+<Note>
+Need help? Contact us at support@distralabs.com
+</Note>

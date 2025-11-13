@@ -58,7 +58,14 @@
       ]
     },
     {
-      "group": "Integration Guides",
+      "group": "React.js Integration",
+      "pages": [
+        "integration-guides/react-image-editor",
+        "integration-guides/react-video-editor"
+      ]
+    },
+    {
+      "group": "Next.js Integration",
       "pages": [
         "integration-guides/nextjs-image-editor",
         "integration-guides/nextjs-video-editor"

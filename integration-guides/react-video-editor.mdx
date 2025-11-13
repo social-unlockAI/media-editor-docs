@@ -1,0 +1,490 @@
+---
+title: 'React.js VideoEditor Integration'
+description: 'Complete guide for integrating the VideoEditor component into your React application'
+icon: 'react'
+---
+
+<Note>
+This guide is for **React.js** applications (Create React App, Vite, custom setups).
+
+For **Next.js**, see the [Next.js VideoEditor Integration](/integration-guides/nextjs-video-editor) guide.
+</Note>
+
+## Prerequisites
+
+<CardGroup cols={3}>
+  <Card title="Node.js 16+" icon="node-js">
+    Node.js version 16.x or higher
+  </Card>
+  <Card title="React 18.2.0" icon="react">
+    React version 18.2.0 (not React 19)
+  </Card>
+  <Card title="Storage Space" icon="hard-drive">
+    ~40MB for WASM modules
+  </Card>
+</CardGroup>
+
+<Warning>
+VideoEditor uses WebAssembly (WASM) for video processing. These files must be copied to your `public/` folder.
+</Warning>
+
+## Installation
+
+<Steps>
+  <Step title="Install the SDK">
+    ```bash
+    npm install @distralabs/media-editor
+    ```
+  </Step>
+
+  <Step title="Install Required Dependencies">
+    ```bash
+    npm install framer-motion lucide-react
+    ```
+  </Step>
+
+  <Step title="Copy WASM Files">
+    Copy the required WASM modules to your public folder:
+
+    ```bash
+    # Copy MediaInfo WASM module
+    cp node_modules/@distralabs/media-editor/dist/MediaInfoModule.wasm public/
+
+    # Copy FFmpeg workers
+    cp node_modules/@distralabs/media-editor/dist/worker.js public/
+    cp node_modules/@distralabs/media-editor/dist/const.js public/
+    cp node_modules/@distralabs/media-editor/dist/errors.js public/
+    cp node_modules/@distralabs/media-editor/dist/decode_worker.js public/
+    cp node_modules/@distralabs/media-editor/dist/encode_worker.js public/
+
+    # Copy FFmpeg core
+    cp -r node_modules/@distralabs/media-editor/dist/umd public/
+    ```
+  </Step>
+
+  <Step title="Verify Files">
+    Your `public/` folder should contain:
+    ```
+    public/
+    ├── MediaInfoModule.wasm    (2.3 MB)
+    ├── worker.js
+    ├── const.js
+    ├── errors.js
+    ├── decode_worker.js
+    ├── encode_worker.js
+    └── umd/
+        └── ffmpeg-core.wasm    (31 MB)
+    ```
+  </Step>
+</Steps>
+
+<Accordion title="Automate WASM Copy with npm Script">
+Add this to your `package.json`:
+
+```json package.json
+{
+  "scripts": {
+    "postinstall": "node scripts/copy-wasm.js"
+  }
+}
+```
+
+Create `scripts/copy-wasm.js`:
+
+```javascript scripts/copy-wasm.js
+const fs = require('fs');
+const path = require('path');
+
+const files = [
+  'MediaInfoModule.wasm',
+  'worker.js',
+  'const.js',
+  'errors.js',
+  'decode_worker.js',
+  'encode_worker.js',
+];
+
+files.forEach(file => {
+  const src = path.join(__dirname, '../node_modules/@distralabs/media-editor/dist', file);
+  const dest = path.join(__dirname, '../public', file);
+  fs.copyFileSync(src, dest);
+  console.log(`✓ Copied ${file}`);
+});
+
+// Copy umd directory
+const umdSrc = path.join(__dirname, '../node_modules/@distralabs/media-editor/dist/umd');
+const umdDest = path.join(__dirname, '../public/umd');
+fs.cpSync(umdSrc, umdDest, { recursive: true });
+console.log('✓ Copied umd/ directory');
+```
+</Accordion>
+
+## VideoEditor Interface
+
+### Core Props
+
+```typescript
+interface VideoEditorProps {
+  // Required
+  licenseKey: string;              // Your SDK license key (JWT)
+  onClose: () => void;             // Called when user closes editor
+
+  // Optional
+  apiUrl?: string;                 // Override license validation API URL
+  defaultVideo?: File;             // Initial video file to load
+  onExport?: EditorCallback;       // Called when video is exported
+  theme?: Record<string, string>;  // Custom theme colors
+  showThemeCreator?: boolean;      // Show theme customization UI
+  brands?: BrandDetails[];         // Brand presets
+}
+```
+
+<Accordion title="View Callback Types">
+```typescript
+interface EditorCallback {
+  (result: VideoExportResult): void;
+}
+
+interface VideoExportResult {
+  videoUrl?: string;     // Object URL or data URL of exported video
+  base64?: string;       // Base64 encoded video (if small enough)
+  blob?: Blob;           // Video blob for upload
+  duration?: number;     // Video duration in seconds
+  width?: number;        // Video width
+  height?: number;       // Video height
+  fps?: number;          // Frames per second
+}
+```
+</Accordion>
+
+## Step-by-Step Integration
+
+### Step 1: Create Your Component
+
+```javascript src/components/VideoStudio.js
+import React, { useState, useCallback, useRef } from 'react';
+import { VideoEditor } from '@distralabs/media-editor';
+import '@distralabs/media-editor/dist/index.css';
+
+function VideoStudio() {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedVideo, setExportedVideo] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Continue to Step 2...
+}
+
+export default VideoStudio;
+```
+
+### Step 2: Implement File Selection
+
+```javascript
+const handleFileSelect = (e) => {
+  const file = e.target.files?.[0];
+  if (file && file.type.startsWith('video/')) {
+    setSelectedFile(file);
+    setShowEditor(true);
+  }
+};
+```
+
+### Step 3: Implement Export Callback
+
+```javascript
+const handleExport = useCallback((result) => {
+  console.log('Video export result:', result);
+  setIsExporting(false);
+
+  if (result.videoUrl || result.base64) {
+    setExportedVideo(result.videoUrl || result.base64);
+    setShowEditor(false);
+  }
+}, []);
+
+const handleClose = () => {
+  setShowEditor(false);
+  setSelectedFile(null);
+};
+
+const handleDownload = () => {
+  if (exportedVideo) {
+    const link = document.createElement('a');
+    link.href = exportedVideo;
+    link.download = `edited-video-${Date.now()}.mp4`;
+    link.click();
+  }
+};
+```
+
+### Step 4: Render the Editor
+
+```javascript
+return (
+  <div>
+    {/* Upload UI */}
+    {!showEditor && (
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        onChange={handleFileSelect}
+      />
+    )}
+
+    {/* Video Editor */}
+    {showEditor && selectedFile && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 40 }}>
+        <VideoEditor
+          licenseKey="YOUR_LICENSE_KEY_HERE"
+          apiUrl="https://your-api.com/social"
+          defaultVideo={selectedFile}
+          onClose={handleClose}
+          onExport={handleExport}
+        />
+      </div>
+    )}
+
+    {/* Loading overlay */}
+    {isExporting && (
+      <div className="loading-overlay">
+        <p>Exporting your video...</p>
+        <p>This may take 1-2 minutes</p>
+      </div>
+    )}
+  </div>
+);
+```
+
+## Video Processing
+
+### Understanding Export Performance
+
+<Info>
+The VideoEditor uses FFmpeg (WebAssembly) for video processing. This happens entirely in the browser.
+</Info>
+
+**Expected Processing Times:**
+- 720p 10s video: ~30 seconds
+- 1080p 30s video: ~2 minutes
+- 4K video: May not work (memory constraints)
+
+<Warning>
+Video processing is **not supported on mobile devices** due to memory limitations.
+</Warning>
+
+### Export Options
+
+<Tabs>
+  <Tab title="Direct Download">
+    ```javascript
+    const handleExport = useCallback((result) => {
+      const link = document.createElement('a');
+      link.href = result.videoUrl;
+      link.download = 'edited-video.mp4';
+      link.click();
+    }, []);
+    ```
+  </Tab>
+
+  <Tab title="Upload to Server">
+    ```javascript
+    const handleExport = useCallback(async (result) => {
+      const blob = await fetch(result.videoUrl).then(res => res.blob());
+
+      const formData = new FormData();
+      formData.append('video', blob, 'edited-video.mp4');
+
+      await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+    }, []);
+    ```
+  </Tab>
+
+  <Tab title="Convert to Base64">
+    ```javascript
+    const handleExport = useCallback(async (result) => {
+      const blob = await fetch(result.videoUrl).then(res => res.blob());
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result;
+        // Use base64 string
+      };
+      reader.readAsDataURL(blob);
+    }, []);
+    ```
+  </Tab>
+</Tabs>
+
+## Theme Customization
+
+```javascript
+const videoTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+  'accent.secondary': '#06b6d4',
+  'timeline.background': '#1e293b',
+};
+
+<VideoEditor
+  theme={videoTheme}
+  showThemeCreator={false}
+  // ... other props
+/>
+```
+
+## Complete Example
+
+<Accordion title="View Full Component Code">
+```javascript src/components/VideoStudio.js
+import React, { useState, useCallback, useRef } from 'react';
+import { VideoEditor } from '@distralabs/media-editor';
+import '@distralabs/media-editor/dist/index.css';
+
+const videoTheme = {
+  'background.primary': '#0f172a',
+  'background.secondary': '#1e293b',
+  'text.primary': '#ffffff',
+  'accent.primary': '#3b82f6',
+};
+
+function VideoStudio() {
+  const fileInputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [exportedVideo, setExportedVideo] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      setSelectedFile(file);
+      setShowEditor(true);
+    }
+  };
+
+  const handleExport = useCallback((result) => {
+    setIsExporting(false);
+    if (result.videoUrl) {
+      setExportedVideo(result.videoUrl);
+      setShowEditor(false);
+    }
+  }, []);
+
+  const handleClose = () => {
+    setShowEditor(false);
+    setSelectedFile(null);
+  };
+
+  const handleDownload = () => {
+    if (exportedVideo) {
+      const link = document.createElement('a');
+      link.href = exportedVideo;
+      link.download = `edited-video-${Date.now()}.mp4`;
+      link.click();
+    }
+  };
+
+  return (
+    <div className="video-studio">
+      {!showEditor && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          onChange={handleFileSelect}
+        />
+      )}
+
+      {showEditor && selectedFile && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 40 }}>
+          <VideoEditor
+            licenseKey="YOUR_LICENSE_KEY"
+            apiUrl="https://localhost:3030/social"
+            defaultVideo={selectedFile}
+            onClose={handleClose}
+            onExport={handleExport}
+            theme={videoTheme}
+            showThemeCreator={false}
+          />
+        </div>
+      )}
+
+      {isExporting && (
+        <div className="loading-overlay">
+          <p>Exporting your video...</p>
+          <p>This may take a moment</p>
+        </div>
+      )}
+
+      {exportedVideo && (
+        <div className="preview">
+          <video src={exportedVideo} controls />
+          <button onClick={handleDownload}>Download</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default VideoStudio;
+```
+</Accordion>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="WASM Files Not Loading">
+    **Symptom:** "MediaInfoModule.wasm 404 Not Found"
+
+    **Solution:**
+    1. Verify WASM files are in `public/` folder
+    2. Restart dev server
+    3. Hard refresh browser (Cmd+Shift+R)
+  </Accordion>
+
+  <Accordion title="Export Takes Too Long">
+    **Symptom:** Export hangs or takes >5 minutes
+
+    **Solutions:**
+    - Use shorter video clips (< 30 seconds recommended)
+    - Lower video resolution before editing
+    - Consider server-side processing for production
+  </Accordion>
+
+  <Accordion title="Mobile Not Working">
+    **Symptom:** VideoEditor fails on mobile devices
+
+    **Solution:**
+    Mobile is not supported. Detect and show warning:
+    ```javascript
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      alert('Video editing requires a desktop browser');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Image Editor" icon="image" href="/integration-guides/react-image-editor">
+    Learn how to integrate the ImageEditor component
+  </Card>
+  <Card title="FAQ" icon="circle-question" href="/troubleshooting/faq">
+    Common issues and troubleshooting
+  </Card>
+</CardGroup>
+
+<Note>
+Need help? Contact us at support@distralabs.com
+</Note>
