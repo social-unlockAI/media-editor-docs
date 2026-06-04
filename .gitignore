@@ -40,3 +40,6 @@ NOTES.md
 *.pem
 credentials.json
 secrets/
+NPX_CLI_PLAN.md
+automated-setup-DRAFT.mdx
+snippets/automated-setup.mdx
