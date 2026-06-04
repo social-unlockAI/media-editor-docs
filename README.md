@@ -1,6 +1,5 @@
 # Media Editor SDK 
 
-
 Official documentation for the `@distralabs/media-editor` SDK.
 
 ## 📚 Documentation
